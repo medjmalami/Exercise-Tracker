@@ -52,26 +52,75 @@ app.get("/api/users", async (req, res) => {
 app.post("/api/users/:_id/exercises", async (req, res) => {
   const { _id } = req.params;
   const { description, duration, date } = req.body;
-  if (date === undefined) {
-    date = new Date();
-  } else {
-    date = new Date(date);
-  }
+
   try {
     const user = await usermodel.findById(_id);
     const exercice = await exercisemodel.create({
       username: user.username,
       description,
       duration,
-      date: date.getTime(),
+      date: date ? new Date(date) : new Date(),
     });
     res.json({
-      exercice,
+      _id: user._id,
+      username: user.username,
+      description: exercice.description,
+      duration: exercice.duration,
+      date: exercice.date.toDateString(),
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({
       error: "Error adding exercise",
+    });
+  }
+});
+
+app.get("/api/users/:_id/logs", async (req, res) => {
+  const { _id } = req.params;
+  const { from, to, limit } = req.query;
+
+  try {
+    const user = await usermodel.findById(_id);
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found",
+      });
+    }
+    let dateObj = {};
+    if (from) {
+      dateObj["$gte"] = new Date(from);
+    }
+    if (to) {
+      dateObj["$lte"] = new Date(to);
+    }
+    let filter = {
+      username: user.username,
+    };
+    if (from || to) {
+      filter.date = dateObj;
+    }
+
+    const exercices = await exercisemodel.find(filter).limit(+limit ?? 100);
+
+    const log = exercices.map((e) => {
+      return {
+        description: e.description,
+        duration: e.duration,
+        date: e.date.toDateString(),
+      };
+    });
+
+    res.json({
+      username: user.username,
+      count: exercices.length,
+      _id: user._id,
+      log,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Error fetching logs",
     });
   }
 });
